@@ -431,9 +431,16 @@
 	    do (incf offset (instruction-length instruction pool offset))
 	  finally (return label-table))))
 
+(defstruct bytecode-table
+  pc-mapping
+  instructions)
+
 (defun encode-bytecode (instructions constant-pool)
   "Encodes bytecode instructions to a list of bytes."
   (etypecase instructions
+    (bytecode-table
+     (encode-bytecode (bytecode-table-instructions instructions)
+                      constant-pool))
     (array
      (coerce instructions 'list))
     (list
@@ -444,11 +451,17 @@
 	   collect bytes into output
 	   finally (return (flatten output))))))
 
+(defun invert-starts (starts length)
+  (let ((a (make-array length :initial-element nil)))
+    (loop for n from 0 for s in starts do (setf (aref a s) n))
+    a))
+
 (defun decode-bytecode (code-bytes constant-pool)
   (let ((bytecode-length (parse-u4 code-bytes))
 	(start-index (class-bytes-index code-bytes)))
     (loop for offset = (- (class-bytes-index code-bytes) start-index)
 	  while (< offset bytecode-length)
+          collect (- (class-bytes-index code-bytes) start-index) into starts
 	  collect (let* ((opcode (parse-u1 code-bytes))
 			 (decoder (aref *bytecode-decoders* opcode)))
 		    (cond
@@ -456,5 +469,8 @@
 		      ((functionp decoder)
 		       (funcall decoder code-bytes constant-pool offset))
 		      (t (error 'class-format-error
-				:message (format nil "Unknown instruction ~A" opcode))))))))
-
+				:message (format nil "Unknown instruction ~A" opcode)))))
+            into instructions
+          finally (return (make-bytecode-table
+                           :pc-mapping (invert-starts starts bytecode-length)
+                           :instructions instructions)))))

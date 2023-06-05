@@ -193,6 +193,8 @@
 
 	   ;; bytecode
 	   #:instruction-length
+           #:bytecode-table-pc-mapping
+           #:bytecode-table-instructions
 
 	   ;; top level
 	   #:assemble-jclass
